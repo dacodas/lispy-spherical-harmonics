@@ -1,6 +1,8 @@
 #version 330 core
 
 in vec3 vertex_position;
+in vec3 model_position;
+
 out vec2 texture_coordinates;
 
 uniform float amplitude;
@@ -29,7 +31,24 @@ void main()
     float y = rho * sin( M_PI * vertex_position.x ) * sin( 2 * M_PI * vertex_position.y );
     float z = rho * cos( M_PI * vertex_position.x );
 
-    gl_Position = proj * view * model * vec4( vec3(x, y, z), 1.0 );
+    // mat4 instanced_model = mat4(1.0, 0.0, 0.0, model_position.x,
+    //                             0.0, 1.0, 0.0, model_position.y,
+    //                             0.0, 0.0, 1.0, model_position.z,
+    //                             0.0, 0.0, 0.0, 1.0);
+
+    mat4 instanced_model = mat4(1.0, 0.0, 0.0, 0.0,
+                                0.0, 1.0, 0.0, 0.0,
+                                0.0, 0.0, 1.0, 0.0,
+                                model_position.x, model_position.y, model_position.z, 1.0);
+
+ 
+
+    // mat4 instanced_model = mat4(1.0, 0.0, 0.0, 0.0,
+    //                             0.0, 1.0, 0.0, 0.0,
+    //                             0.0, 0.0, 1.0, 0.0,
+    //                             0.0, 0.0, 0.0, 1.0);
+
+    gl_Position = proj * view * instanced_model * model * vec4( vec3(x, y, z), 1.0 );
 
     texture_coordinates = vertex_position.xy;
 }

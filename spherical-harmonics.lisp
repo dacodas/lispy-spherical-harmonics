@@ -4,6 +4,7 @@
   (defparameter *shader-count* 0))
 
 (defparameter *see-texture* nil)
+(defparameter *instances* 7)
 
 (defparameter *window-width* 1920)
 (defparameter *window-height* 1080)
@@ -108,6 +109,10 @@
   (gl:clear :color-buffer)
   (gl:clear :depth-buffer)
 
+  ;; (setf *eye-theta* (coerce (* 2 pi (cos (* 0.01 *shader-time*))) 'single-float))
+  (incf *eye-phi* 0.01)
+  ;; (setf *eye-rho* (coerce (* 2 pi (cos (* 0.01 *shader-time*))) 'single-float))
+
   (setf *view-matrix*
 	    (let ((eye (list (* *eye-rho* (sin *eye-theta*) (cos *eye-phi*))
 			             (* *eye-rho* (sin *eye-theta*) (sin *eye-phi*))
@@ -192,34 +197,24 @@
     (gl:bind-buffer :array-buffer *surface-vertex-buffer*)
     (gl:bind-buffer :element-array-buffer *surface-element-buffer*)
 
-    (gl:use-program *points-shader-program*)
+    #+nil(progn
+           (gl:use-program *points-shader-program*)
+           (gl:vertex-attrib-pointer (gl:get-attrib-location *points-shader-program* "vertex_position") 2 :float nil 0 (cffi:null-pointer))
 
-    (gl:vertex-attrib-pointer (gl:get-attrib-location *points-shader-program* "vertex_position") 2 :float nil 0 (cffi:null-pointer))
+           (gl:point-size 1.0)
+           (gl:draw-arrays :points
+                           *triangle-offset*
+                           *triangles-to-draw*)
 
-    (gl:point-size 1.0)
-    #+nil(gl:draw-arrays :points
-                    *triangle-offset*
-                    *triangles-to-draw*)
+           (gl:use-program *surface-shader-program*)
+           (gl:draw-elements :triangle-strip
+                             (let ((array (opengl:make-null-gl-array :unsigned-short)))
+                               (setf (opengl::gl-array-pointer array)
+                                     (cffi:make-pointer *triangle-offset*))
+                               array)
+                             :count *triangles-to-draw*))
 
-    (gl:use-program *surface-shader-program*)
-
-
-    (gl:draw-elements :triangle-strip
-                      (let ((array (opengl:make-null-gl-array :unsigned-short)))
-                        (setf (opengl::gl-array-pointer array)
-                              (cffi:make-pointer *triangle-offset*))
-                        array)
-                      :count *triangles-to-draw*)
-
-    
-
-    
-    
-    
-    (let* ((start -10.0)
-           (end 10.0)
-           (inc 5.0)
-           (x-angle (* 0.1 *shader-time*))
+    (let* ((x-angle (* 0.1 *shader-time*))
            (y-angle (* 0.1 *shader-time*))
            (z-angle (* 0.5 *shader-time*))
            (rotation-matrix
@@ -241,44 +236,57 @@
                            (,(sin z-angle) ,(cos z-angle) 0.0 0.0) 
                            (0.0 0.0 1.0 0.0)
                            (0.0 0.0 0.0 1.0))))))
-      (loop for x = start then (incf x inc)
-         while (<= x end)
-         do (loop for y = start then (incf y inc)
-               while (<= y end)
-               do
-                 (loop for z = start then (incf z inc)
-                    while (<= z end)
 
-                    do (let* ((translation-matrix
-                               (make-array '(4 4) :element-type 'single-float
-				                           :initial-contents `((1.0 0.0 0.0 ,x)
-							                                   (0.0 1.0 0.0 ,y)
-							                                   (0.0 0.0 1.0 ,z)
-							                                   (0.0 0.0 0.0 1.0))))
-                              (model-matrix
-                               (mmult translation-matrix
-                                      rotation-matrix)))
+      (gl:use-program *points-shader-program*)
 
-                         (gl:use-program *points-shader-program*)
+      #+nil(gl:uniform-matrix-4fv
+       (gl:get-uniform-location *points-shader-program* "model")
+       (matrix-4v-to-simple-array model-matrix))
 
-                         (gl:uniform-matrix-4fv
-                          (gl:get-uniform-location *points-shader-program* "model")
-                          (matrix-4v-to-simple-array model-matrix))
+      #+nil(gl:draw-arrays :points
+                           *triangle-offset*
+                           *triangles-to-draw*)
 
-                         #+nil(gl:draw-arrays :points
-                                         *triangle-offset*
-                                         *triangles-to-draw*)
+      (gl:use-program *surface-shader-program*)
 
-                         (gl:use-program *surface-shader-program*)
-                         (gl:uniform-matrix-4fv
-                          (gl:get-uniform-location *surface-shader-program* "model")
-                          (matrix-4v-to-simple-array model-matrix))
-                         (gl:draw-elements :triangle-strip
-                                           (let ((array (opengl:make-null-gl-array :unsigned-short)))
-                                             (setf (opengl::gl-array-pointer array)
-                                                   (cffi:make-pointer *triangle-offset*))
-                                             array)
-                                           :count *triangles-to-draw*)))))))
+      (let* ((instance-positions-array (make-instances-array *instances* 10.0))
+             (instance-positions-gl-array (gl:alloc-gl-array :float (array-dimension instance-positions-array 0))))
+        (dotimes (i (length instance-positions-array))
+          (setf (gl:glaref instance-positions-gl-array i) (aref instance-positions-array i)))
+
+        (gl:bind-buffer :array-buffer *instance-positions-buffer*)
+        (gl:buffer-data :array-buffer :static-draw
+                        instance-positions-gl-array))
+
+      (let ((vp (gl:get-attrib-location *surface-shader-program* "vertex_position"))
+            (mp (gl:get-attrib-location *surface-shader-program* "model_position")))
+
+        (gl:enable-vertex-attrib-array vp)
+        (gl:bind-buffer :array-buffer *surface-vertex-buffer*)
+        (gl:vertex-attrib-pointer vp 2 :float nil 0 (cffi:null-pointer))
+
+        (gl:enable-vertex-attrib-array mp)
+        (gl:bind-buffer :array-buffer *instance-positions-buffer*)
+        (gl:vertex-attrib-pointer mp 3 :float nil 0 (cffi:null-pointer))
+
+        (%gl:vertex-attrib-divisor vp 0)
+        (%gl:vertex-attrib-divisor mp 1)
+
+        (gl:bind-buffer :element-array-buffer *surface-element-buffer*)
+        #+nil(gl:draw-elements :triangle-strip
+                          (let ((array (opengl:make-null-gl-array :unsigned-short)))
+                            (setf (opengl::gl-array-pointer array)
+                                  (cffi:make-pointer *triangle-offset*))
+                            array)
+                          :count *triangles-to-draw*)
+        
+        (gl:draw-elements-instanced :triangle-strip
+                                    (let ((array (opengl:make-null-gl-array :unsigned-short)))
+                                      (setf (opengl::gl-array-pointer array)
+                                            (cffi:make-pointer *triangle-offset*))
+                                      array)
+                                    (expt *instances* 3)
+                                    :count *triangles-to-draw*))))
 
   (progn
     (gl:use-program *texture-shader-program*)
@@ -331,6 +339,26 @@
                                        *shaders-directory*))
          (read-shader (merge-pathnames #P"texture.fragment.shader"
                                        *shaders-directory*)))))
+
+(defun make-instances-array (&optional instances spacing)
+  (let* ((counter -1)
+         (instances (or instances 3))
+         (spacing (or spacing 3.0))
+         (array (make-array (* 3 (expt instances 3)) :element-type 'single-float))
+         (start (- (floor instances 2)))
+         (end (- start)))
+    (loop for x from start upto end
+          while (<= x end)
+          do (loop for y from start upto end
+                   while (<= y end)
+                   do
+                   (loop for z from start upto end
+                         while (<= z end)
+                         do (progn
+                              (setf (aref array (incf counter)) (* x spacing)
+                                    (aref array (incf counter)) (* y spacing)
+                                    (aref array (incf counter)) (* z spacing))))))
+    array))
 
 (defun run ()
   (cl-glfw3:with-init-window (:title "Window test" :width 1920 :height 1080) 
@@ -462,7 +490,6 @@
       (gl:free-gl-array points-gl-array)
       (gl:use-program *texture-shader-program*))
 
-
     (let ((elements #(0 1 2 3))
           (elements-gl-array (gl:alloc-gl-array :unsigned-short (* 4 2))))
       (gl:bind-buffer :element-array-buffer *texture-element-buffer*)
@@ -473,6 +500,7 @@
 
     (gl:enable-vertex-attrib-array 0)
     
+    (defparameter *instance-positions-buffer* (first (gl:gen-buffers 1)))
 
     (loop until (cl-glfw3:window-should-close-p)
        do (let* ((current-time (get-internal-run-time))

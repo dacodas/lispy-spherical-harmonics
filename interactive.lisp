@@ -7,7 +7,7 @@
      (defparameter *picture-rho*
        (make-array '(128 128)
 			       :element-type 'float
-			       :displaced-to (generate-rho-sampler 10 5 128)
+			       :displaced-to (generate-rho-sampler 50 128)
 			       :displaced-index-offset 0))
      (let ((texture *texture-rho*)
            (picture *picture-rho*))
