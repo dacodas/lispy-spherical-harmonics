@@ -5,6 +5,7 @@
 
 (defparameter *see-texture* nil)
 (defparameter *instances* 7)
+(defparameter *need-to-update-instances* t)
 
 (defparameter *window-width* 1920)
 (defparameter *window-height* 1080)
@@ -249,14 +250,16 @@
 
       (gl:use-program *surface-shader-program*)
 
-      (let* ((instance-positions-array (make-instances-array *instances* 10.0))
-             (instance-positions-gl-array (gl:alloc-gl-array :float (array-dimension instance-positions-array 0))))
-        (dotimes (i (length instance-positions-array))
-          (setf (gl:glaref instance-positions-gl-array i) (aref instance-positions-array i)))
+      (if *need-to-update-instances*
+          (let* ((instance-positions-array (make-instances-array *instances* 10.0))
+                 (instance-positions-gl-array (gl:alloc-gl-array :float (array-dimension instance-positions-array 0))))
+            (dotimes (i (length instance-positions-array))
+              (setf (gl:glaref instance-positions-gl-array i) (aref instance-positions-array i)))
 
-        (gl:bind-buffer :array-buffer *instance-positions-buffer*)
-        (gl:buffer-data :array-buffer :static-draw
-                        instance-positions-gl-array))
+            (gl:bind-buffer :array-buffer *instance-positions-buffer*)
+            (gl:buffer-data :array-buffer :static-draw
+                            instance-positions-gl-array)
+            (setf *need-to-update-instances* nil)))
 
       (let ((vp (gl:get-attrib-location *surface-shader-program* "vertex_position"))
             (mp (gl:get-attrib-location *surface-shader-program* "model_position")))
@@ -273,12 +276,6 @@
         (%gl:vertex-attrib-divisor mp 1)
 
         (gl:bind-buffer :element-array-buffer *surface-element-buffer*)
-        #+nil(gl:draw-elements :triangle-strip
-                          (let ((array (opengl:make-null-gl-array :unsigned-short)))
-                            (setf (opengl::gl-array-pointer array)
-                                  (cffi:make-pointer *triangle-offset*))
-                            array)
-                          :count *triangles-to-draw*)
         
         (gl:draw-elements-instanced :triangle-strip
                                     (let ((array (opengl:make-null-gl-array :unsigned-short)))
