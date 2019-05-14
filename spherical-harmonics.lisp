@@ -307,17 +307,17 @@
             (setf *need-to-update-instances* nil)))
 
       (let ((x (make-instances-array *instances* 10.0)))
-        (dotimes (i *instances*)
+        (dotimes (i (expt *instances* 3))
           (let ((sphere-center (make-array 4
                                            :element-type 'single-float
                                            :initial-element 0.0)))
             (dotimes (j 3)
               (setf (aref sphere-center j) (aref x (+ (* 3 i) j))))
 
-            (format t "~A~%"
-                    (raycast-from-mouse *mouse-x* *mouse-y*
-                                        (make-matlisp-vector #(0.0 0.0 0.0 0.0))
-                                        #+nil(make-matlisp-vector sphere-center))))))
+            (if
+             (raycast-from-mouse *mouse-x* *mouse-y*
+                                 (make-matlisp-vector sphere-center))
+             (format t "~A~%" i)))))
 
       (let ((vp (gl:get-attrib-location *surface-shader-program* "vertex_position"))
             (mp (gl:get-attrib-location *surface-shader-program* "model_position")))
