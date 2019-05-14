@@ -4,7 +4,7 @@
   (defparameter *shader-count* 0))
 
 (defparameter *see-texture* nil)
-(defparameter *instances* 7)
+(defparameter *instances* 3)
 (defparameter *need-to-update-instances* t)
 
 (defparameter *window-width* 1920)
@@ -16,7 +16,7 @@
 
 (defparameter *shader-time* 0)
 
-(defparameter *resolution* 200)
+(defparameter *resolution* 20)
 (defparameter *triangle-offset* 0)
 (defparameter *triangles-to-draw* (* *resolution* *resolution* 2))
 
@@ -31,7 +31,10 @@
 							                             (0.0 0.0 1.0 0.0)
 							                             (0.0 0.0 0.0 1.0))))
 
-(defun raycast-from-mouse (x y)
+(defparameter *mouse-x* 0.0)
+(defparameter *mouse-y* 0.0)
+
+(defun raycast-from-mouse (x y sphere-center)
 
   (let* ((normalized-x (/ (coerce x 'single-float) *window-width*))
          (normalized-y (/ (coerce y 'single-float) *window-height*))
@@ -39,7 +42,7 @@
          (device-y (- 1.0 (* 2 normalized-y)))
          (clip-space-ray (list device-x device-y 1.0 1.0)))
 
-    (let ((sphere-center (make-matlisp-vector '(0.0 0.0 5.0 0.0)))
+    (let (;; (sphere-center (make-matlisp-vector '(0.0 0.0 5.0 0.0)))
           (radius 1.5)) 
       (let* ((ray 
               (matlisp::normalize!
@@ -66,13 +69,16 @@
              (c (- (matlisp:dot origin-difference origin-difference) (expt radius 2)))
              (discriminant (- (* b b) (* 4 a c))))
         
-        (format t "~A~%" ray-origin)
-        (format t "~A~%" ray)
-        (format t "~A~%" discriminant)
-        (format t "~A~%" (> discriminant 0))))))
+        ;; (format t "~A~%" ray-origin)
+        ;; (format t "~A~%" ray)
+        ;; (format t "~A~%" discriminant)
+        ;; (format t "~A~%" (> discriminant 0))
+        (> discriminant 0)))))
 
 (cl-glfw3:def-cursor-pos-callback cursor-position-callback (window x y)
-  (raycast-from-mouse x y))
+
+  (setf *mouse-x* x)
+  (setf *mouse-y* y))
 
 (cl-glfw3:def-key-callback key-callback (window key scancode action mod-keys)
 
@@ -299,6 +305,19 @@
             (gl:buffer-data :array-buffer :static-draw
                             instance-positions-gl-array)
             (setf *need-to-update-instances* nil)))
+
+      (let ((x (make-instances-array *instances* 10.0)))
+        (dotimes (i *instances*)
+          (let ((sphere-center (make-array 4
+                                           :element-type 'single-float
+                                           :initial-element 0.0)))
+            (dotimes (j 3)
+              (setf (aref sphere-center j) (aref x (+ (* 3 i) j))))
+
+            (format t "~A~%"
+                    (raycast-from-mouse *mouse-x* *mouse-y*
+                                        (make-matlisp-vector #(0.0 0.0 0.0 0.0))
+                                        #+nil(make-matlisp-vector sphere-center))))))
 
       (let ((vp (gl:get-attrib-location *surface-shader-program* "vertex_position"))
             (mp (gl:get-attrib-location *surface-shader-program* "model_position")))
