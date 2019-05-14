@@ -1,6 +1,5 @@
 (in-package :spherical-harmonics)
 
-
 (cl-glfw3:def-window-size-callback update-viewport (window w h)
   (declare (ignore window))
 

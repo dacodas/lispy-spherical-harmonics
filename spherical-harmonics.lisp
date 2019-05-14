@@ -31,6 +31,49 @@
 							                             (0.0 0.0 1.0 0.0)
 							                             (0.0 0.0 0.0 1.0))))
 
+(defun raycast-from-mouse (x y)
+
+  (let* ((normalized-x (/ (coerce x 'single-float) *window-width*))
+         (normalized-y (/ (coerce y 'single-float) *window-height*))
+         (device-x (- (* 2 normalized-x) 1.0))
+         (device-y (- 1.0 (* 2 normalized-y)))
+         (clip-space-ray (list device-x device-y 1.0 1.0)))
+
+    (let ((sphere-center (make-matlisp-vector '(0.0 0.0 5.0 0.0)))
+          (radius 1.5)) 
+      (let* ((ray 
+              (matlisp::normalize!
+               (solve-linear-system
+                (matrix-multiply
+                 (make-matlisp-matrix-displaced *projection-matrix*)
+                 (make-matlisp-matrix-displaced *view-matrix*))
+                (make-matlisp-vector clip-space-ray))))
+             (ray-origin
+              (make-matlisp-vector 
+               (list (* *eye-rho* (sin *eye-theta*) (cos *eye-phi*))
+			         (* *eye-rho* (sin *eye-theta*) (sin *eye-phi*))
+			         (* *eye-rho* (cos *eye-theta*))
+                     1.0)))
+             (origin-difference
+              (let ((vector-1 (slot-value ray-origin 'matlisp::store))
+                    (vector-2 (slot-value sphere-center 'matlisp::store))
+                    (result (make-matlisp-vector '(0.0 0.0 0.0 0.0))))
+                (dotimes (i 4)
+                  (setf (aref (slot-value result 'matlisp::store) i) (- (aref vector-1 i) (aref vector-2 i))))
+                result))
+             (a (matlisp:dot ray ray))
+             (b (* 2.0 (matlisp:dot ray origin-difference)))
+             (c (- (matlisp:dot origin-difference origin-difference) (expt radius 2)))
+             (discriminant (- (* b b) (* 4 a c))))
+        
+        (format t "~A~%" ray-origin)
+        (format t "~A~%" ray)
+        (format t "~A~%" discriminant)
+        (format t "~A~%" (> discriminant 0))))))
+
+(cl-glfw3:def-cursor-pos-callback cursor-position-callback (window x y)
+  (raycast-from-mouse x y))
+
 (cl-glfw3:def-key-callback key-callback (window key scancode action mod-keys)
 
   (declare (ignore window scancode mod-keys))
@@ -111,7 +154,7 @@
   (gl:clear :depth-buffer)
 
   ;; (setf *eye-theta* (coerce (* 2 pi (cos (* 0.01 *shader-time*))) 'single-float))
-  (incf *eye-phi* 0.01)
+  ;; (incf *eye-phi* 0.01)
   ;; (setf *eye-rho* (coerce (* 2 pi (cos (* 0.01 *shader-time*))) 'single-float))
 
   (setf *view-matrix*
@@ -123,10 +166,6 @@
 		           (make-array 3 :initial-contents (list 0.0 0.0 1.0)))))
 
   (setf *projection-matrix* (perspective *fov* (/ *window-width* *window-height*)  0.1 10000))
-
-  
-
-  
 
   (let* ((max-amplitude 0.5))
     (loop for shader-program in (list *surface-shader-program*
@@ -362,6 +401,7 @@
     (setf %gl:*gl-get-proc-address* #'cl-glfw3:get-proc-address)
     ;; (cl-glfw3:set-key-callback 'quit-on-escape)
     (cl-glfw3:set-key-callback 'key-callback)
+    (cl-glfw3:set-cursor-position-callback 'cursor-position-callback)
     (cl-glfw3:set-window-size-callback 'update-viewport)
 
     (setup-surface-shader-program)
