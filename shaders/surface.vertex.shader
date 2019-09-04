@@ -3,6 +3,9 @@
 in vec3 vertex_position;
 in vec3 model_position;
 
+in float green_v;
+out float green;
+
 out vec2 texture_coordinates;
 
 uniform float amplitude;
@@ -51,4 +54,5 @@ void main()
     gl_Position = proj * view * instanced_model * model * vec4( vec3(x, y, z), 1.0 );
 
     texture_coordinates = vertex_position.xy;
+    green = green_v;
 }

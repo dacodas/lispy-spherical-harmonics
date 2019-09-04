@@ -16,7 +16,7 @@
 
 (defparameter *shader-time* 0)
 
-(defparameter *resolution* 20)
+(defparameter *resolution* 100)
 (defparameter *triangle-offset* 0)
 (defparameter *triangles-to-draw* (* *resolution* *resolution* 2))
 
@@ -33,6 +33,8 @@
 
 (defparameter *mouse-x* 0.0)
 (defparameter *mouse-y* 0.0)
+
+(defparameter *colors* nil)
 
 (defun raycast-from-mouse (x y sphere-center)
 
@@ -306,6 +308,12 @@
                             instance-positions-gl-array)
             (setf *need-to-update-instances* nil)))
 
+
+      (setf *colors* (make-array (expt *instances* 3)
+                                 :element-type 'single-float
+                                 :initial-element 0.0))
+
+
       (let ((x (make-instances-array *instances* 10.0)))
         (dotimes (i (expt *instances* 3))
           (let ((sphere-center (make-array 4
@@ -317,21 +325,36 @@
             (if
              (raycast-from-mouse *mouse-x* *mouse-y*
                                  (make-matlisp-vector sphere-center))
-             (format t "~A~%" i)))))
+             (progn (format t "~A~%" i)
+                    (setf (aref *colors* i) 1.0))))))
 
-      (let ((vp (gl:get-attrib-location *surface-shader-program* "vertex_position"))
-            (mp (gl:get-attrib-location *surface-shader-program* "model_position")))
+      (let* ((colors-gl-array (gl:alloc-gl-array :float (array-dimension *colors* 0))))
+        (dotimes (i (length *colors*))
+          (setf (gl:glaref colors-gl-array i) (aref *colors* i)))
 
-        (gl:enable-vertex-attrib-array vp)
+        (gl:bind-buffer :array-buffer *colors-buffer*)
+        (gl:buffer-data :array-buffer :static-draw
+                        colors-gl-array))
+
+      (let ((vertex-position (gl:get-attrib-location *surface-shader-program* "vertex_position"))
+            (model-position (gl:get-attrib-location *surface-shader-program* "model_position"))
+            (green (gl:get-attrib-location *surface-shader-program* "green_v")))
+
+        (gl:enable-vertex-attrib-array vertex-position)
         (gl:bind-buffer :array-buffer *surface-vertex-buffer*)
-        (gl:vertex-attrib-pointer vp 2 :float nil 0 (cffi:null-pointer))
+        (gl:vertex-attrib-pointer vertex-position 2 :float nil 0 (cffi:null-pointer))
 
-        (gl:enable-vertex-attrib-array mp)
+        (gl:enable-vertex-attrib-array model-position)
         (gl:bind-buffer :array-buffer *instance-positions-buffer*)
-        (gl:vertex-attrib-pointer mp 3 :float nil 0 (cffi:null-pointer))
+        (gl:vertex-attrib-pointer model-position 3 :float nil 0 (cffi:null-pointer))
 
-        (%gl:vertex-attrib-divisor vp 0)
-        (%gl:vertex-attrib-divisor mp 1)
+        (gl:enable-vertex-attrib-array green)
+        (gl:bind-buffer :array-buffer *colors-buffer*)
+        (gl:vertex-attrib-pointer green 1 :float nil 0 (cffi:null-pointer))
+
+        (%gl:vertex-attrib-divisor vertex-position 0)
+        (%gl:vertex-attrib-divisor model-position 1)
+        (%gl:vertex-attrib-divisor green 1)
 
         (gl:bind-buffer :element-array-buffer *surface-element-buffer*)
         
@@ -557,6 +580,7 @@
     (gl:enable-vertex-attrib-array 0)
     
     (defparameter *instance-positions-buffer* (first (gl:gen-buffers 1)))
+    (defparameter *colors-buffer* (first (gl:gen-buffers 1)))
 
     (loop until (cl-glfw3:window-should-close-p)
        do (let* ((current-time (get-internal-run-time))
